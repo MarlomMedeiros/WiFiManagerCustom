@@ -118,6 +118,8 @@ const char HTTP_STYLE[]            PROGMEM = "<style>"
 ":disabled {opacity: 0.5;}"
 "</style>";
 
+#define WM_NOHELP
+
 #ifndef WM_NOHELP
 const char HTTP_HELP[]             PROGMEM =
  "<br/><h3>Available pages</h3><hr>"
@@ -215,12 +217,12 @@ const char HTTP_INFO_stamac[]     PROGMEM = "<dt>Station MAC</dt><dd>{1}</dd>";
 const char HTTP_INFO_conx[]       PROGMEM = "<dt>Connected</dt><dd>{1}</dd>";
 const char HTTP_INFO_autoconx[]   PROGMEM = "<dt>Autoconnect</dt><dd>{1}</dd>";
 
-const char HTTP_INFO_aboutver[]     PROGMEM = "<dt>WiFiManager</dt><dd>{1}</dd>";
+const char HTTP_INFO_aboutver[]     PROGMEM = "<dt>Nextcon</dt><dd>{1}</dd>";
 const char HTTP_INFO_aboutarduino[] PROGMEM = "<dt>Arduino</dt><dd>{1}</dd>";
 const char HTTP_INFO_aboutsdk[]     PROGMEM = "<dt>ESP-SDK/IDF</dt><dd>{1}</dd>";
 const char HTTP_INFO_aboutdate[]    PROGMEM = "<dt>Build date</dt><dd>{1}</dd>";
 
-const char S_brand[]              PROGMEM = "WiFiManager";
+const char S_brand[]              PROGMEM = "Nextcon";
 const char S_debugPrefix[]        PROGMEM = "*wm:";
 const char S_y[]                  PROGMEM = "Yes";
 const char S_n[]                  PROGMEM = "No";
