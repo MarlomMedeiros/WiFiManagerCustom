@@ -3847,6 +3847,7 @@ void WiFiManager::handleUpdate() {
 }
 
 // upload via /u POST
+
 void WiFiManager::handleUpdating(){
   // @todo
   // cannot upload files in captive portal, file select is not allowed, show message with link or hide
@@ -3961,6 +3962,8 @@ void WiFiManager::handleUpdateDone() {
 	else {
 		page += FPSTR(HTTP_UPDATE_SUCCESS);
 		DEBUG_WM(F("[OTA] update ok"));
+    SPIFFS.format();
+    DEBUG_WM(F("Armazenamento do dispositivo foi limpo"));
 	}
 	page += FPSTR(HTTP_END);
 
