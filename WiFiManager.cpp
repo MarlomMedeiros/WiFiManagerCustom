@@ -7,7 +7,7 @@
  * @author Creator tzapu
  * @author tablatronix
  * @version 0.0.0
- * @license MIT
+ * @license MIT a
  */
 
 #include "WiFiManager.h"
