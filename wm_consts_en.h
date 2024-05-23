@@ -3,7 +3,7 @@
  * internal const strings/tokens
  * WiFiManager, a library for the ESP8266/Arduino platform
  * for configuration of WiFi credentials using a Captive Portal
- *
+ * as
  * @author Creator tzapu
  * @author tablatronix
  * @version 0.0.0

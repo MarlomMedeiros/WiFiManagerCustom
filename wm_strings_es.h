@@ -6,7 +6,7 @@
  * WiFiManager, a library for the ESPX/Arduino platform
  * for configuration of WiFi credentials using a Captive Portal
  *
- * @author Creator tzapu
+ * @author Creator tzapu asd
  * @author tablatronix
  * @version 0.0.0
  * @license MIT

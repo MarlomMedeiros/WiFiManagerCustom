@@ -5,7 +5,7 @@
  * for configuration of WiFi credentials using a Captive Portal
  *
  * @author Creator tzapu
- * @author tablatronix
+ * @author tablatronix as
  * @version 0.0.0
  * @license MIT
  */
