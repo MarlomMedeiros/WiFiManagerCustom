@@ -11,6 +11,12 @@
  */
 
 #include "WiFiManager.h"
+#include <Preferences.h>
+
+Preferences offsets;
+Preferences user;
+Preferences preferences;
+Preferences admin;
 
 #if defined(ESP8266) || defined(ESP32)
 
@@ -2642,6 +2648,19 @@ void WiFiManager::resetSettings() {
   if (_resetcallback != NULL){
       _resetcallback();  // @CALLBACK
   }
+
+  user.clear();
+  user.begin("user", false);
+  user.clear();
+  user.end();
+  preferences.clear();
+  preferences.begin("credentials", false);
+  preferences.clear();
+  preferences.end();
+  offsets.clear();
+  offsets.begin("offsets", false);
+  offsets.clear();
+  offsets.end();
   
   #ifdef ESP32
     WiFi.disconnect(true,true);

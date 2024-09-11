@@ -75,7 +75,7 @@ const char HTTP_SCAN_LINK[]        PROGMEM = "<br/><form action='/wifi?refresh=1
 const char HTTP_SAVED[]            PROGMEM = "<div class='msg'>Salvando credenciais<br/>Tentando conectar o dispositivo a rede WIFI<br />Se isso falhar conecte a rede do dispositivo novamente.</div>";
 const char HTTP_PARAMSAVED[]       PROGMEM = "<div class='msg S'>Salvo<br/></div>";
 const char HTTP_END[]              PROGMEM = "</div></body></html>";
-const char HTTP_ERASEBTN[]         PROGMEM = "<br/><form action='/erase' method='get'><button class='D'>Limpar dados</button></form>";
+const char HTTP_ERASEBTN[]         PROGMEM = "<br/><form action='/erase' method='get'><button class='D'>Redefinir Configurações Default</button></form>";
 const char HTTP_UPDATEBTN[]        PROGMEM = "<br/><form action='/update' method='get'><button>Atualizar</button></form>";
 const char HTTP_BACKBTN[]          PROGMEM = "<hr><br/><form action='/' method='get'><button>Voltar</button></form>";
 
@@ -216,12 +216,12 @@ const char HTTP_INFO_stamac[]     PROGMEM = "<dt>MAC da estação</dt><dd>{1}</d
 const char HTTP_INFO_conx[]       PROGMEM = "<dt>Conectado</dt><dd>{1}</dd>";
 const char HTTP_INFO_autoconx[]   PROGMEM = "<dt>Conexão automática</dt><dd>{1}</dd>";
 
-const char HTTP_INFO_aboutver[]     PROGMEM = "<dt>WiFiManager</dt><dd>{1}</dd>";
+const char HTTP_INFO_aboutver[]     PROGMEM = "<dt>Nextcon</dt><dd>{1}</dd>";
 const char HTTP_INFO_aboutarduino[] PROGMEM = "<dt>Arduino</dt><dd>{1}</dd>";
 const char HTTP_INFO_aboutsdk[]     PROGMEM = "<dt>ESP-SDK/IDF</dt><dd>{1}</dd>";
 const char HTTP_INFO_aboutdate[]    PROGMEM = "<dt>Data de compilação</dt><dd>{1}</dd>";
 
-const char S_brand[]              PROGMEM = "WiFiManager";
+const char S_brand[]              PROGMEM = "Nextcon";
 const char S_debugPrefix[]        PROGMEM = "*wm:";
 const char S_y[]                  PROGMEM = "Sim";
 const char S_n[]                  PROGMEM = "Não";

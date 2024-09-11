@@ -17,7 +17,7 @@
 // -----------------------------------------------------------------------------------------------
 // TOKENS
 
-const char WM_VERSION_STR[] PROGMEM = "v2.0.17";
+const char WM_VERSION_STR[] PROGMEM = "v3.6.0";
 
 static const char _wifi_token[]       PROGMEM = "wifi";
 static const char _wifinoscan_token[] PROGMEM = "wifinoscan";
