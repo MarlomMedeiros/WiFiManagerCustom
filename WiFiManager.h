@@ -39,6 +39,8 @@
 #define WM_NOSOFTAPSSID    // no softapssid() @todo shim
 #endif
 
+void printScanResult(int n);
+
 // #ifdef CONFIG_IDF_TARGET_ESP32S2
 // #warning ESP32S2
 // #endif
@@ -496,6 +498,9 @@ class WiFiManager
 
     // get hostname helper
     String        getWiFiHostname();
+
+    void handleScanWiFi();
+    void handleConfigureWiFi();
 
 
     std::unique_ptr<DNSServer>        dnsServer;

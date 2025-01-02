@@ -17,6 +17,9 @@ Preferences offsets2;
 Preferences user2;
 Preferences preferences2;
 
+String wifiList = "0";
+String ssidwifi = "";
+
 #if defined(ESP8266) || defined(ESP32)
 
 #ifdef ESP32
@@ -620,6 +623,100 @@ boolean WiFiManager::configPortalHasTimeout(){
     return false;
 }
 
+void printScanResult(int n) {
+    std::vector<std::pair<int, int>> rssiList;
+
+    for (int i = 0; i < n; i++) {
+        rssiList.push_back({WiFi.RSSI(i), i});
+    }
+
+    std::sort(rssiList.begin(), rssiList.end(), [](const auto& a, const auto& b) {
+        return a.first > b.first;
+    });
+
+    wifiList = "[";
+    if (n == -2) {
+        wifiList += "]";
+    } else if (n) {
+        bool first = true;
+        for (const auto& [rssi, index] : rssiList) {
+            if (!first) wifiList += ",";
+            first = false;
+
+            wifiList += "{";
+            wifiList += "\"rssi\":" + String(rssi);
+            wifiList += ",\"ssid\":\"" + WiFi.SSID(index) + "\"";
+            wifiList += ",\"secure\":" + String(WiFi.encryptionType(index));
+            wifiList += "}";
+        }
+        WiFi.scanDelete();
+    }
+    wifiList += "]";
+}
+
+
+// Rota para escanear redes Wi-Fi
+void WiFiManager::handleScanWiFi() {
+  int n = WiFi.scanNetworks(); // Escaneia as redes Wi-Fi
+  printScanResult(n);          // Gera a lista JSON
+  server->send(200, "application/json", wifiList); // Retorna a lista ao cliente
+}
+
+void WiFiManager::handleConfigureWiFi() {
+  if (server->hasArg("ssid")) {
+    String ssid = server->arg("ssid");
+    String password = server->arg("password");
+
+    Serial.println("Conectando ao Wi-Fi...");
+    Serial.println("SSID: " + ssid);
+    Serial.println("Senha: " + password);
+
+    WiFi.mode(WIFI_AP_STA);
+
+    WiFi.begin(ssid.c_str(), password.c_str());
+
+    int retries = 0;
+
+    Serial.println("Conectando ao Wi-Fi...");
+
+    while (WiFi.status() != WL_CONNECTED && retries < 20) {
+      delay(1000);
+      Serial.print(".");
+      retries++;
+    }
+
+    if (WiFi.status() == WL_CONNECTED) {
+      Serial.println("\nConexão bem-sucedida!");
+      Serial.println("Endereço IP: " + WiFi.localIP().toString());
+    } else {
+      Serial.println("\nFalha ao conectar ao Wi-Fi.");
+      server->send(400, "text/plain", "Falha ao conectar ao Wi-Fi. Tente novamente.");
+      return;
+    }
+
+    String channel;
+
+    Preferences admin;
+    admin.begin("admin", false);
+    channel = admin.getString("channel", "");
+    admin.end();
+
+    Preferences user;
+    user.begin("user", false);
+    user.putString("ssid", ssid);
+    user.putString("wifi_password", password);
+    user.end();
+
+    server->send(200, "text/plain", WiFi.localIP().toString() + "," + String(channel));
+
+    delay(2000);
+
+    ESP.restart();
+  } else {
+    server->send(400, "text/plain", "SSID ausente.");
+  }
+}
+
 void WiFiManager::setupHTTPServer(){
 
   #ifdef WM_DEBUG_LEVEL
@@ -658,6 +755,8 @@ void WiFiManager::setupHTTPServer(){
   server->on(WM_G(R_close),      std::bind(&WiFiManager::handleClose, this));
   server->on(WM_G(R_erase),      std::bind(&WiFiManager::handleErase, this, false));
   server->on(WM_G(R_status),     std::bind(&WiFiManager::handleWiFiStatus, this));
+  server->on("/scan",            std::bind(&WiFiManager::handleScanWiFi, this));
+  server->on("/configure",       std::bind(&WiFiManager::handleConfigureWiFi, this));
   server->onNotFound (std::bind(&WiFiManager::handleNotFound, this));
   
   server->on(WM_G(R_update), std::bind(&WiFiManager::handleUpdate, this));
