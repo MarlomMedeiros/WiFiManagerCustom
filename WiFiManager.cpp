@@ -630,9 +630,10 @@ void printScanResult(int n) {
         rssiList.push_back({WiFi.RSSI(i), i});
     }
 
-    std::sort(rssiList.begin(), rssiList.end(), [](const auto& a, const auto& b) {
-        return a.first > b.first;
-    });
+    for (std::vector<std::pair<int, int>>::const_iterator it = rssiList.begin(); it != rssiList.end(); ++it) {
+        int rssi = it->first;
+        int index = it->second;
+    }
 
     wifiList = "[";
     if (n == -2) {
