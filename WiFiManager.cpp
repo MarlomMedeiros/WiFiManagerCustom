@@ -623,6 +623,9 @@ boolean WiFiManager::configPortalHasTimeout(){
     return false;
 }
 
+
+#include <algorithm>
+
 void printScanResult(int n) {
     std::vector<std::pair<int, int>> rssiList;
 
@@ -630,17 +633,19 @@ void printScanResult(int n) {
         rssiList.push_back({WiFi.RSSI(i), i});
     }
 
-    for (std::vector<std::pair<int, int>>::const_iterator it = rssiList.begin(); it != rssiList.end(); ++it) {
-        int rssi = it->first;
-        int index = it->second;
-    }
+    // Ordena em ordem decrescente de RSSI (mais forte primeiro)
+    std::sort(rssiList.begin(), rssiList.end(), [](const std::pair<int, int>& a, const std::pair<int, int>& b) {
+        return a.first > b.first;
+    });
 
     wifiList = "[";
     if (n == -2) {
         wifiList += "]";
     } else if (n) {
         bool first = true;
-        for (const auto& [rssi, index] : rssiList) {
+        for (const auto& pair : rssiList) {
+            int rssi = pair.first;
+            int index = pair.second;
             if (!first) wifiList += ",";
             first = false;
 
@@ -654,6 +659,7 @@ void printScanResult(int n) {
     }
     wifiList += "]";
 }
+
 
 
 // Rota para escanear redes Wi-Fi
