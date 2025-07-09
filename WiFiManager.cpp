@@ -670,6 +670,13 @@ void printScanResult(int n) {
 void WiFiManager::handleScanWiFi() {
   int n = WiFi.scanNetworks(); // Escaneia as redes Wi-Fi
   printScanResult(n);          // Gera a lista JSON
+  
+  // Add cache control headers to prevent caching issues
+  server->sendHeader(F("Cache-Control"), F("no-cache, no-store, must-revalidate"));
+  server->sendHeader(F("Pragma"), F("no-cache"));
+  server->sendHeader(F("Expires"), F("-1"));
+  server->sendHeader(FPSTR(HTTP_HEAD_CORS), FPSTR(HTTP_HEAD_CORS_ALLOW_ALL));
+  
   server->send(200, "application/json", wifiList); // Retorna a lista ao cliente
 }
 
@@ -717,6 +724,12 @@ void WiFiManager::handleConfigureWiFi() {
     user.putString("ssid", ssid);
     user.putString("wifi_password", password);
     user.end();
+
+    // Add cache control headers to prevent caching issues
+    server->sendHeader(F("Cache-Control"), F("no-cache, no-store, must-revalidate"));
+    server->sendHeader(F("Pragma"), F("no-cache"));
+    server->sendHeader(F("Expires"), F("-1"));
+    server->sendHeader(FPSTR(HTTP_HEAD_CORS), FPSTR(HTTP_HEAD_CORS_ALLOW_ALL));
 
     server->send(200, "text/plain", WiFi.localIP().toString() + "," + String(channel));
 
@@ -1408,6 +1421,12 @@ String WiFiManager::getHTTPHead(String title){
 }
 
 void WiFiManager::HTTPSend(const String &content){
+  // Default to sending cache control headers for all responses
+  if(!server->hasHeader(F("Cache-Control"))) {
+    server->sendHeader(F("Cache-Control"), F("no-cache, no-store, must-revalidate"));
+    server->sendHeader(F("Pragma"), F("no-cache"));
+    server->sendHeader(F("Expires"), F("-1"));
+  }
   server->send(200, FPSTR(HTTP_HEAD_CT), content);
 }
 
@@ -1457,6 +1476,12 @@ void WiFiManager::handleRoot() {
   reportStatus(page);
   page += FPSTR(HTTP_END);
 
+  // Add cache control headers to prevent blank page issues
+  server->sendHeader(F("Cache-Control"), F("no-cache, no-store, must-revalidate"));
+  server->sendHeader(F("Pragma"), F("no-cache"));
+  server->sendHeader(F("Expires"), F("-1"));
+  server->sendHeader(FPSTR(HTTP_HEAD_CORS), FPSTR(HTTP_HEAD_CORS_ALLOW_ALL));
+  
   HTTPSend(page);
   if(_preloadwifiscan) WiFi_scanNetworks(_scancachetime,true); // preload wifiscan throttled, async
   // @todo buggy, captive portals make a query on every page load, causing this to run every time in addition to the real page load
@@ -1513,6 +1538,12 @@ void WiFiManager::handleWifi(boolean scan) {
   reportStatus(page);
   page += FPSTR(HTTP_END);
 
+  // Add cache control headers to prevent blank page issues
+  server->sendHeader(F("Cache-Control"), F("no-cache, no-store, must-revalidate"));
+  server->sendHeader(F("Pragma"), F("no-cache"));
+  server->sendHeader(F("Expires"), F("-1"));
+  server->sendHeader(FPSTR(HTTP_HEAD_CORS), FPSTR(HTTP_HEAD_CORS_ALLOW_ALL));
+
   HTTPSend(page);
 
   #ifdef WM_DEBUG_LEVEL
@@ -1541,6 +1572,12 @@ void WiFiManager::handleParam(){
   if(_showBack) page += FPSTR(HTTP_BACKBTN);
   reportStatus(page);
   page += FPSTR(HTTP_END);
+
+  // Add cache control headers to prevent blank page issues
+  server->sendHeader(F("Cache-Control"), F("no-cache, no-store, must-revalidate"));
+  server->sendHeader(F("Pragma"), F("no-cache"));
+  server->sendHeader(F("Expires"), F("-1"));
+  server->sendHeader(FPSTR(HTTP_HEAD_CORS), FPSTR(HTTP_HEAD_CORS_ALLOW_ALL));
 
   HTTPSend(page);
 
@@ -2187,6 +2224,12 @@ void WiFiManager::handleInfo() {
   if(_showBack) page += FPSTR(HTTP_BACKBTN);
   page += FPSTR(HTTP_HELP);
   page += FPSTR(HTTP_END);
+
+  // Add cache control headers to prevent blank page issues
+  server->sendHeader(F("Cache-Control"), F("no-cache, no-store, must-revalidate"));
+  server->sendHeader(F("Pragma"), F("no-cache"));
+  server->sendHeader(F("Expires"), F("-1"));
+  server->sendHeader(FPSTR(HTTP_HEAD_CORS), FPSTR(HTTP_HEAD_CORS_ALLOW_ALL));
 
   HTTPSend(page);
 
