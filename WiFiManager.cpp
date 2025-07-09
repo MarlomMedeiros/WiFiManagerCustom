@@ -643,9 +643,13 @@ void printScanResult(int n) {
         wifiList += "]";
     } else if (n) {
         bool first = true;
-        for (const auto& pair : rssiList) {
-            int rssi = pair.first;
-            int index = pair.second;
+        // Limitar o número de redes no resultado para evitar problemas de memória
+        const int maxNetworks = 20;
+        int networksToShow = min(maxNetworks, (int)rssiList.size());
+        
+        for (int i = 0; i < networksToShow; i++) {
+            int rssi = rssiList[i].first;
+            int index = rssiList[i].second;
             if (!first) wifiList += ",";
             first = false;
 
