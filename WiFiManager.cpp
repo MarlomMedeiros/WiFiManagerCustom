@@ -638,14 +638,29 @@ void printScanResult(int n) {
         return a.first > b.first;
     });
 
+    // Limit to max 10 networks to prevent device overload
+    const int WM_MAX_NETWORKS = 10;
+    int displayCount = 0;
+
     wifiList = "[";
     if (n == -2) {
         wifiList += "]";
     } else if (n) {
         bool first = true;
         for (const auto& pair : rssiList) {
+            // Stop if we've reached the max networks limit
+            if (displayCount >= WM_MAX_NETWORKS) {
+                break;
+            }
+            
             int rssi = pair.first;
             int index = pair.second;
+            
+            // Skip empty SSIDs
+            if (WiFi.SSID(index) == "") {
+                continue;
+            }
+            
             if (!first) wifiList += ",";
             first = false;
 
@@ -654,6 +669,8 @@ void printScanResult(int n) {
             wifiList += ",\"ssid\":\"" + WiFi.SSID(index) + "\"";
             wifiList += ",\"secure\":" + String(WiFi.encryptionType(index));
             wifiList += "}";
+            
+            displayCount++;
         }
         WiFi.scanDelete();
     }
