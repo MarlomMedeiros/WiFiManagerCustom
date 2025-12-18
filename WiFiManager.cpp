@@ -790,7 +790,13 @@ void WiFiManager::setupDNSD(){
 void WiFiManager::setupConfigPortal() {
   setupHTTPServer();
   _lastscan = 0; // reset network scan cache
-  if(_preloadwifiscan) WiFi_scanNetworks(true,true); // preload wifiscan , async
+  
+  // Always preload WiFi scan when starting config portal (sync, not async)
+  // This ensures the network list is ready when the user opens the page
+  #ifdef WM_DEBUG_LEVEL
+  DEBUG_WM(WM_DEBUG_VERBOSE,F("Preloading WiFi scan..."));
+  #endif
+  WiFi_scanNetworks(true, false); // force scan, synchronous
 }
 
 boolean WiFiManager::startConfigPortal() {
