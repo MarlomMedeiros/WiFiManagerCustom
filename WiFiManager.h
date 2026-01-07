@@ -579,7 +579,7 @@ class WiFiManager
     #endif
 
     // parameter options
-    int           _minimumQuality         = -1;    // filter wifiscan ap by this rssi
+    int           _minimumQuality         = 20;    // filter wifiscan ap by this rssi (20% minimum for ESP32-C3 optimization)
     int           _staShowStaticFields    = 0;     // ternary 1=always show static ip fields, 0=only if set, -1=never(cannot change ips via web!)
     int           _staShowDns             = 0;     // ternary 1=always show dns, 0=only if set, -1=never(cannot change dns via web!)
     boolean       _removeDuplicateAPs     = true;  // remove dup aps from wifiscan
@@ -627,8 +627,8 @@ class WiFiManager
     //  my scan takes 7-10 seconds
 public:
     boolean       _preloadwifiscan        = false; // preload wifiscan if true
-    unsigned int  _scancachetime          = 30000; // ms cache time for preload scans
-    boolean       _asyncScan              = false; // perform wifi network scan async
+    unsigned int  _scancachetime          = 60000; // ms cache time for preload scans (increased for ESP32-C3)
+    boolean       _asyncScan              = true;  // perform wifi network scan async (enabled for ESP32-C3)
     
 protected:
 
