@@ -1715,48 +1715,67 @@ String WiFiManager::WiFiManager::getScanItemOut(){
       #ifdef WM_DEBUG_LEVEL
       DEBUG_WM(n,F("networks found"));
       #endif
-      //sort networks
-      int indices[n];
-      for (int i = 0; i < n; i++) {
-        indices[i] = i;
-      }
-
-      // RSSI SORT
-      for (int i = 0; i < n; i++) {
-        for (int j = i + 1; j < n; j++) {
-          if (WiFi.RSSI(indices[j]) > WiFi.RSSI(indices[i])) {
-            std::swap(indices[i], indices[j]);
-          }
-        }
-      }
-
-      /* test std:sort
-        std::sort(indices, indices + n, [](const int & a, const int & b) -> bool
-        {
-        return WiFi.RSSI(a) > WiFi.RSSI(b);
-        });
-       */
-
-      // remove duplicates ( must be RSSI sorted )
-      if (_removeDuplicateAPs) {
-        String cssid;
-        for (int i = 0; i < n; i++) {
-          if (indices[i] == -1) continue;
-          cssid = WiFi.SSID(indices[i]);
-          for (int j = i + 1; j < n; j++) {
-            if (cssid == WiFi.SSID(indices[j])) {
-              #ifdef WM_DEBUG_LEVEL
-              DEBUG_WM(WM_DEBUG_VERBOSE,F("DUP AP:"),WiFi.SSID(indices[j]));
-              #endif
-              indices[j] = -1; // set dup aps to index -1
-            }
-          }
-        }
-      }
-
+      
       // Limit to max 10 networks to prevent device overload
       const int WM_MAX_NETWORKS = 10;
+      int validIndices[WM_MAX_NETWORKS];
+      int validCount = 0;
+      
+      // Process ALL networks but keep only top 10 best in memory
+      for (int i = 0; i < n; i++) {
+        // Skip empty SSIDs
+        if (WiFi.SSID(i) == "") continue;
+        
+        int currentRSSI = WiFi.RSSI(i);
+        
+        // Skip duplicates if enabled
+        if (_removeDuplicateAPs) {
+          bool isDuplicate = false;
+          String currentSSID = WiFi.SSID(i);
+          for (int j = 0; j < validCount; j++) {
+            if (currentSSID == WiFi.SSID(validIndices[j])) {
+              isDuplicate = true;
+              break;
+            }
+          }
+          if (isDuplicate) continue;
+        }
+        
+        // If we haven't filled the array yet, just add it
+        if (validCount < WM_MAX_NETWORKS) {
+          validIndices[validCount++] = i;
+        }
+        // If already have 10, check if current is better than worst
+        else {
+          // Find the worst RSSI in array
+          int worstIdx = 0;
+          for (int j = 1; j < WM_MAX_NETWORKS; j++) {
+            if (WiFi.RSSI(validIndices[j]) < WiFi.RSSI(validIndices[worstIdx])) {
+              worstIdx = j;
+            }
+          }
+          // If current is better than worst, replace it
+          if (currentRSSI > WiFi.RSSI(validIndices[worstIdx])) {
+            validIndices[worstIdx] = i;
+          }
+        }
+      }
+      
+      // Sort the selected networks by RSSI (descending)
+      for (int i = 0; i < validCount - 1; i++) {
+        for (int j = i + 1; j < validCount; j++) {
+          if (WiFi.RSSI(validIndices[j]) > WiFi.RSSI(validIndices[i])) {
+            int temp = validIndices[i];
+            validIndices[i] = validIndices[j];
+            validIndices[j] = temp;
+          }
+        }
+      }
+      
       int displayCount = 0;
+      
+      // Pre-allocate page String to reduce reallocations (estimate ~200 bytes per network)
+      page.reserve(validCount * 200);
 
       // token precheck, to speed up replacements on large ap lists
       String HTTP_ITEM_STR = FPSTR(HTTP_ITEM);
@@ -1775,27 +1794,22 @@ String WiFiManager::WiFiManager::getScanItemOut(){
       bool tok_i = HTTP_ITEM_STR.indexOf(FPSTR(T_i)) > 0;
       
       //display networks in page
-      for (int i = 0; i < n; i++) {
-        if (indices[i] == -1) continue; // skip dups
+      for (int i = 0; i < validCount; i++) {
 
         #ifdef WM_DEBUG_LEVEL
-        DEBUG_WM(WM_DEBUG_VERBOSE,F("AP: "),(String)WiFi.RSSI(indices[i]) + " " + (String)WiFi.SSID(indices[i]));
+        DEBUG_WM(WM_DEBUG_VERBOSE,F("AP: "),(String)WiFi.RSSI(validIndices[i]) + " " + (String)WiFi.SSID(validIndices[i]));
         #endif
 
-        int rssiperc = getRSSIasQuality(WiFi.RSSI(indices[i]));
-        uint8_t enc_type = WiFi.encryptionType(indices[i]);
+        int rssiperc = getRSSIasQuality(WiFi.RSSI(validIndices[i]));
+        uint8_t enc_type = WiFi.encryptionType(validIndices[i]);
 
         if (_minimumQuality == -1 || _minimumQuality < rssiperc) {
           String item = HTTP_ITEM_STR;
-          if(WiFi.SSID(indices[i]) == ""){
-            // Serial.println(WiFi.BSSIDstr(indices[i]));
-            continue; // No idea why I am seeing these, lets just skip them for now
-          }
-          item.replace(FPSTR(T_V), htmlEntities(WiFi.SSID(indices[i]))); // ssid no encoding
-          item.replace(FPSTR(T_v), htmlEntities(WiFi.SSID(indices[i]),true)); // ssid no encoding
+          item.replace(FPSTR(T_V), htmlEntities(WiFi.SSID(validIndices[i]))); // ssid no encoding
+          item.replace(FPSTR(T_v), htmlEntities(WiFi.SSID(validIndices[i]),true)); // ssid no encoding
           if(tok_e) item.replace(FPSTR(T_e), encryptionTypeStr(enc_type));
           if(tok_r) item.replace(FPSTR(T_r), (String)rssiperc); // rssi percentage 0-100
-          if(tok_R) item.replace(FPSTR(T_R), (String)WiFi.RSSI(indices[i])); // rssi db
+          if(tok_R) item.replace(FPSTR(T_R), (String)WiFi.RSSI(validIndices[i])); // rssi db
           if(tok_q) item.replace(FPSTR(T_q), (String)int(round(map(rssiperc,0,100,1,4)))); //quality icon 1-4
           if(tok_i){
             if (enc_type != WM_WIFIOPEN) {
@@ -1809,14 +1823,6 @@ String WiFiManager::WiFiManager::getScanItemOut(){
           #endif
           page += item;
           displayCount++;
-          
-          // Stop if we've reached the max networks limit
-          if(displayCount >= WM_MAX_NETWORKS) {
-            #ifdef WM_DEBUG_LEVEL
-            DEBUG_WM(WM_DEBUG_VERBOSE,F("Max networks limit reached:"),WM_MAX_NETWORKS);
-            #endif
-            break;
-          }
           delay(0);
         } else {
           #ifdef WM_DEBUG_LEVEL
@@ -1825,6 +1831,13 @@ String WiFiManager::WiFiManager::getScanItemOut(){
         }
 
       }
+      
+      #ifdef WM_DEBUG_LEVEL
+      if(displayCount < validCount) {
+        DEBUG_WM(WM_DEBUG_VERBOSE,F("Some networks filtered by _minimumQuality"));
+      }
+      #endif
+      
       page += FPSTR(HTTP_BR);
     }
 
