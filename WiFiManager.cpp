@@ -627,56 +627,67 @@ boolean WiFiManager::configPortalHasTimeout(){
 #include <algorithm>
 
 void printScanResult(int n) {
-    std::vector<std::pair<int, int>> rssiList;
-
-    for (int i = 0; i < n; i++) {
-        rssiList.push_back({WiFi.RSSI(i), i});
-    }
-
-    // Ordena em ordem decrescente de RSSI (mais forte primeiro)
-    std::sort(rssiList.begin(), rssiList.end(), [](const std::pair<int, int>& a, const std::pair<int, int>& b) {
-        return a.first > b.first;
-    });
-
-    // Limit to max 10 networks to prevent device overload
     const int WM_MAX_NETWORKS = 10;
-    int displayCount = 0;
-
+    
     wifiList = "[";
     if (n == -2) {
         wifiList += "]";
-    } else if (n) {
+    } else if (n > 0) {
+        // Primeiro: coletar TODAS as redes válidas em array pequeno
+        int validIndices[WM_MAX_NETWORKS];
+        int validCount = 0;
+        int scannedCount = 0;
+        
+        // Itera TODAS as N redes, mas guarda apenas as 10 melhores
+        for (int i = 0; i < n; i++) {
+            if (WiFi.SSID(i) == "") continue;
+            
+            int currentRSSI = WiFi.RSSI(i);
+            
+            // Se ainda não temos 10, adiciona direto
+            if (validCount < WM_MAX_NETWORKS) {
+                validIndices[validCount++] = i;
+            }
+            // Se já temos 10, verifica se é melhor que o pior
+            else {
+                // Encontra o pior RSSI no array
+                int worstIdx = 0;
+                for (int j = 1; j < WM_MAX_NETWORKS; j++) {
+                    if (WiFi.RSSI(validIndices[j]) < WiFi.RSSI(validIndices[worstIdx])) {
+                        worstIdx = j;
+                    }
+                }
+                // Se atual é melhor que o pior, substitui
+                if (currentRSSI > WiFi.RSSI(validIndices[worstIdx])) {
+                    validIndices[worstIdx] = i;
+                }
+            }
+        }
+        
+        // Agora ordena apenas os validCount elementos
+        for (int i = 0; i < validCount - 1; i++) {
+            for (int j = i + 1; j < validCount; j++) {
+                if (WiFi.RSSI(validIndices[j]) > WiFi.RSSI(validIndices[i])) {
+                    int temp = validIndices[i];
+                    validIndices[i] = validIndices[j];
+                    validIndices[j] = temp;
+                }
+            }
+        }
+        
+        // Build JSON
         bool first = true;
-        for (const auto& pair : rssiList) {
-            // Stop if we've reached the max networks limit
-            if (displayCount >= WM_MAX_NETWORKS) {
-                break;
-            }
-            
-            int rssi = pair.first;
-            int index = pair.second;
-            
-            // Skip empty SSIDs
-            if (WiFi.SSID(index) == "") {
-                continue;
-            }
-            
+        for (int i = 0; i < validCount; i++) {
             if (!first) wifiList += ",";
             first = false;
-
-            wifiList += "{";
-            wifiList += "\"rssi\":" + String(rssi);
-            wifiList += ",\"ssid\":\"" + WiFi.SSID(index) + "\"";
-            wifiList += ",\"secure\":" + String(WiFi.encryptionType(index));
-            wifiList += "}";
-            
-            displayCount++;
+            wifiList += "{\"rssi\":" + String(WiFi.RSSI(validIndices[i]));
+            wifiList += ",\"ssid\":\"" + WiFi.SSID(validIndices[i]) + "\"";
+            wifiList += ",\"secure\":" + String(WiFi.encryptionType(validIndices[i])) + "}";
         }
         WiFi.scanDelete();
     }
     wifiList += "]";
 }
-
 
 
 // Rota para escanear redes Wi-Fi
