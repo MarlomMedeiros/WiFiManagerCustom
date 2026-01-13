@@ -633,45 +633,52 @@ void printScanResult(int n) {
         return;
     }
 
-    std::vector<std::pair<int, int>> rssiList;
+    // Limita o processamento para economizar memória
+    int maxToProcess = std::min(n, WM_MAX_NETWORKS * 2); // Processa 2x para ter margem
     
-    // Reserva memória apenas para o necessário
-    rssiList.reserve((n > WM_MAX_NETWORKS) ? WM_MAX_NETWORKS : n);
+    std::vector<std::pair<int, int>> rssiList;
+    rssiList.reserve(maxToProcess);
 
-    // Popula o vector com todas as redes
-    for (int i = 0; i < n; i++) {
+    // Popula apenas com as primeiras redes (limitado)
+    for (int i = 0; i < maxToProcess; i++) {
         rssiList.push_back({WiFi.RSSI(i), i});
     }
 
-    // Ordena parcialmente para obter apenas as N melhores (mais eficiente)
+    // Ordena parcialmente para obter apenas as N melhores
+    int sortLimit = std::min((int)rssiList.size(), WM_MAX_NETWORKS);
     std::partial_sort(rssiList.begin(), 
-                     rssiList.begin() + std::min((int)rssiList.size(), WM_MAX_NETWORKS),
+                     rssiList.begin() + sortLimit,
                      rssiList.end(),
                      [](const std::pair<int, int>& a, const std::pair<int, int>& b) {
                          return a.first > b.first;
                      });
 
+    // Pre-aloca String para evitar realocações (estimativa: 50 bytes por rede)
+    wifiList.reserve(1 + sortLimit * 50 + 1);
+    
     // Gera JSON apenas com as melhores redes
     bool first = true;
-    int limit = std::min((int)rssiList.size(), WM_MAX_NETWORKS);
     
-    for (int i = 0; i < limit; i++) {
+    for (int i = 0; i < sortLimit; i++) {
         int rssi = rssiList[i].first;
         int index = rssiList[i].second;
         
         // Skip empty SSIDs
         String ssid = WiFi.SSID(index);
-        if (ssid == "") {
+        if (ssid.length() == 0) {
             continue;
         }
         
         if (!first) wifiList += ",";
         first = false;
 
-        wifiList += "{";
-        wifiList += "\"rssi\":" + String(rssi);
-        wifiList += ",\"ssid\":\"" + ssid + "\"";
-        wifiList += ",\"secure\":" + String(WiFi.encryptionType(index));
+        // Otimiza concatenação usando menos Strings temporárias
+        wifiList += "{\"rssi\":";
+        wifiList += rssi;
+        wifiList += ",\"ssid\":\"";
+        wifiList += ssid;
+        wifiList += "\",\"secure\":";
+        wifiList += WiFi.encryptionType(index);
         wifiList += "}";
     }
     
