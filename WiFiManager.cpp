@@ -638,8 +638,6 @@ void printScanResult(int n) {
         return a.first > b.first;
     });
 
-    // Limit to max 10 networks to prevent device overload
-    const int WM_MAX_NETWORKS = 10;
     int displayCount = 0;
 
     wifiList = "[";
