@@ -627,51 +627,55 @@ boolean WiFiManager::configPortalHasTimeout(){
 #include <algorithm>
 
 void printScanResult(int n) {
-    std::vector<std::pair<int, int>> rssiList;
+    wifiList = "[";
+    if (n <= 0 || n == -2) {
+        wifiList += "]";
+        return;
+    }
 
+    std::vector<std::pair<int, int>> rssiList;
+    
+    // Reserva memória apenas para o necessário
+    rssiList.reserve((n > WM_MAX_NETWORKS) ? WM_MAX_NETWORKS : n);
+
+    // Popula o vector com todas as redes
     for (int i = 0; i < n; i++) {
         rssiList.push_back({WiFi.RSSI(i), i});
     }
 
-    // Ordena em ordem decrescente de RSSI (mais forte primeiro)
-    std::sort(rssiList.begin(), rssiList.end(), [](const std::pair<int, int>& a, const std::pair<int, int>& b) {
-        return a.first > b.first;
-    });
+    // Ordena parcialmente para obter apenas as N melhores (mais eficiente)
+    std::partial_sort(rssiList.begin(), 
+                     rssiList.begin() + std::min((int)rssiList.size(), WM_MAX_NETWORKS),
+                     rssiList.end(),
+                     [](const std::pair<int, int>& a, const std::pair<int, int>& b) {
+                         return a.first > b.first;
+                     });
 
-    int displayCount = 0;
-
-    wifiList = "[";
-    if (n == -2) {
-        wifiList += "]";
-    } else if (n) {
-        bool first = true;
-        for (const auto& pair : rssiList) {
-            // Stop if we've reached the max networks limit
-            if (displayCount >= WM_MAX_NETWORKS) {
-                break;
-            }
-            
-            int rssi = pair.first;
-            int index = pair.second;
-            
-            // Skip empty SSIDs
-            if (WiFi.SSID(index) == "") {
-                continue;
-            }
-            
-            if (!first) wifiList += ",";
-            first = false;
-
-            wifiList += "{";
-            wifiList += "\"rssi\":" + String(rssi);
-            wifiList += ",\"ssid\":\"" + WiFi.SSID(index) + "\"";
-            wifiList += ",\"secure\":" + String(WiFi.encryptionType(index));
-            wifiList += "}";
-            
-            displayCount++;
+    // Gera JSON apenas com as melhores redes
+    bool first = true;
+    int limit = std::min((int)rssiList.size(), WM_MAX_NETWORKS);
+    
+    for (int i = 0; i < limit; i++) {
+        int rssi = rssiList[i].first;
+        int index = rssiList[i].second;
+        
+        // Skip empty SSIDs
+        String ssid = WiFi.SSID(index);
+        if (ssid == "") {
+            continue;
         }
-        WiFi.scanDelete();
+        
+        if (!first) wifiList += ",";
+        first = false;
+
+        wifiList += "{";
+        wifiList += "\"rssi\":" + String(rssi);
+        wifiList += ",\"ssid\":\"" + ssid + "\"";
+        wifiList += ",\"secure\":" + String(WiFi.encryptionType(index));
+        wifiList += "}";
     }
+    
+    WiFi.scanDelete();
     wifiList += "]";
 }
 
