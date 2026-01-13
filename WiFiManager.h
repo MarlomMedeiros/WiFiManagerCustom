@@ -41,6 +41,11 @@
 
 void printScanResult(int n);
 
+// Limite máximo de redes WiFi a serem exibidas (previne problemas de memória)
+#ifndef WM_MAX_NETWORKS
+  #define WM_MAX_NETWORKS 10
+#endif
+
 // #ifdef CONFIG_IDF_TARGET_ESP32S2
 // #warning ESP32S2
 // #endif

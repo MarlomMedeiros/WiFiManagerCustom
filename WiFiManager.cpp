@@ -1704,6 +1704,15 @@ String WiFiManager::WiFiManager::getScanItemOut(){
       #ifdef WM_DEBUG_LEVEL
       DEBUG_WM(n,F("networks found"));
       #endif
+      
+      // Limita o número de redes processadas para evitar problemas de memória
+      if (n > WM_MAX_NETWORKS) {
+        #ifdef WM_DEBUG_LEVEL
+        DEBUG_WM(WM_DEBUG_VERBOSE,F("Limiting scan results from"),String(n) + " to " + String(WM_MAX_NETWORKS));
+        #endif
+        n = WM_MAX_NETWORKS;
+      }
+      
       //sort networks
       int indices[n];
       for (int i = 0; i < n; i++) {
@@ -1742,10 +1751,6 @@ String WiFiManager::WiFiManager::getScanItemOut(){
           }
         }
       }
-
-      // Limit to max 10 networks to prevent device overload
-      const int WM_MAX_NETWORKS = 10;
-      int displayCount = 0;
 
       // token precheck, to speed up replacements on large ap lists
       String HTTP_ITEM_STR = FPSTR(HTTP_ITEM);
@@ -1797,15 +1802,6 @@ String WiFiManager::WiFiManager::getScanItemOut(){
           DEBUG_WM(WM_DEBUG_DEV,item);
           #endif
           page += item;
-          displayCount++;
-          
-          // Stop if we've reached the max networks limit
-          if(displayCount >= WM_MAX_NETWORKS) {
-            #ifdef WM_DEBUG_LEVEL
-            DEBUG_WM(WM_DEBUG_VERBOSE,F("Max networks limit reached:"),WM_MAX_NETWORKS);
-            #endif
-            break;
-          }
           delay(0);
         } else {
           #ifdef WM_DEBUG_LEVEL
