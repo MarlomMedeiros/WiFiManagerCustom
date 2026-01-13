@@ -625,6 +625,7 @@ boolean WiFiManager::configPortalHasTimeout(){
 
 
 #include <algorithm>
+#include <queue>
 
 void printScanResult(int n) {
     wifiList = "[";
@@ -633,37 +634,51 @@ void printScanResult(int n) {
         return;
     }
 
-    // Limita o processamento para economizar memória
-    int maxToProcess = std::min(n, WM_MAX_NETWORKS * 2); // Processa 2x para ter margem
-    
-    std::vector<std::pair<int, int>> rssiList;
-    rssiList.reserve(maxToProcess);
+    // Usa min-heap (priority_queue) para manter apenas as top N redes
+    // Isso economiza memória: só armazena N redes em vez de todas
+    auto cmp = [](const std::pair<int, int>& a, const std::pair<int, int>& b) {
+        return a.first > b.first; // Min-heap: menor RSSI no topo
+    };
+    std::priority_queue<std::pair<int, int>, std::vector<std::pair<int, int>>, decltype(cmp)> topNetworks(cmp);
 
-    // Popula apenas com as primeiras redes (limitado)
-    for (int i = 0; i < maxToProcess; i++) {
-        rssiList.push_back({WiFi.RSSI(i), i});
+    // Processa TODAS as redes, mas mantém apenas as WM_MAX_NETWORKS melhores
+    for (int i = 0; i < n; i++) {
+        int rssi = WiFi.RSSI(i);
+        
+        if (topNetworks.size() < WM_MAX_NETWORKS) {
+            // Ainda não atingiu o limite, adiciona
+            topNetworks.push({rssi, i});
+        } else if (rssi > topNetworks.top().first) {
+            // RSSI melhor que o pior da lista, substitui
+            topNetworks.pop();
+            topNetworks.push({rssi, i});
+        }
     }
 
-    // Ordena parcialmente para obter apenas as N melhores
-    int sortLimit = std::min((int)rssiList.size(), WM_MAX_NETWORKS);
-    std::partial_sort(rssiList.begin(), 
-                     rssiList.begin() + sortLimit,
-                     rssiList.end(),
-                     [](const std::pair<int, int>& a, const std::pair<int, int>& b) {
-                         return a.first > b.first;
-                     });
-
-    // Pre-aloca String para evitar realocações (estimativa: 50 bytes por rede)
-    wifiList.reserve(1 + sortLimit * 50 + 1);
+    // Converte heap para vector e ordena em ordem decrescente
+    std::vector<std::pair<int, int>> bestNetworks;
+    bestNetworks.reserve(topNetworks.size());
     
-    // Gera JSON apenas com as melhores redes
+    while (!topNetworks.empty()) {
+        bestNetworks.push_back(topNetworks.top());
+        topNetworks.pop();
+    }
+    
+    std::sort(bestNetworks.begin(), bestNetworks.end(), 
+              [](const std::pair<int, int>& a, const std::pair<int, int>& b) {
+                  return a.first > b.first; // Ordem decrescente
+              });
+
+    // Pre-aloca String (estimativa: 50 bytes por rede)
+    wifiList.reserve(1 + bestNetworks.size() * 50 + 1);
+    
+    // Gera JSON
     bool first = true;
     
-    for (int i = 0; i < sortLimit; i++) {
-        int rssi = rssiList[i].first;
-        int index = rssiList[i].second;
+    for (const auto& network : bestNetworks) {
+        int rssi = network.first;
+        int index = network.second;
         
-        // Skip empty SSIDs
         String ssid = WiFi.SSID(index);
         if (ssid.length() == 0) {
             continue;
@@ -672,7 +687,6 @@ void printScanResult(int n) {
         if (!first) wifiList += ",";
         first = false;
 
-        // Otimiza concatenação usando menos Strings temporárias
         wifiList += "{\"rssi\":";
         wifiList += rssi;
         wifiList += ",\"ssid\":\"";
