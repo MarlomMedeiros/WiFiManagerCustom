@@ -626,16 +626,14 @@ boolean WiFiManager::configPortalHasTimeout(){
 
 #include <algorithm>
 
-static const int WM_MAX_SCAN_NETWORKS = 10;
-
-static void addScanIndexBySignal(int *validIndices, int &validCount, int maxNetworks, int index, bool removeDuplicates) {
+static void addScanIndexBySignal(std::vector<int> &validIndices, int index, bool removeDuplicates) {
     if (WiFi.SSID(index) == "") return;
 
     int currentRSSI = WiFi.RSSI(index);
 
     if (removeDuplicates) {
         String currentSSID = WiFi.SSID(index);
-        for (int i = 0; i < validCount; i++) {
+        for (size_t i = 0; i < validIndices.size(); i++) {
             if (currentSSID == WiFi.SSID(validIndices[i])) {
                 if (currentRSSI > WiFi.RSSI(validIndices[i])) {
                     validIndices[i] = index;
@@ -645,26 +643,12 @@ static void addScanIndexBySignal(int *validIndices, int &validCount, int maxNetw
         }
     }
 
-    if (validCount < maxNetworks) {
-        validIndices[validCount++] = index;
-        return;
-    }
-
-    int worstIdx = 0;
-    for (int i = 1; i < validCount; i++) {
-        if (WiFi.RSSI(validIndices[i]) < WiFi.RSSI(validIndices[worstIdx])) {
-            worstIdx = i;
-        }
-    }
-
-    if (currentRSSI > WiFi.RSSI(validIndices[worstIdx])) {
-        validIndices[worstIdx] = index;
-    }
+    validIndices.push_back(index);
 }
 
-static void sortScanIndicesBySignal(int *validIndices, int validCount) {
-    for (int i = 0; i < validCount - 1; i++) {
-        for (int j = i + 1; j < validCount; j++) {
+static void sortScanIndicesBySignal(std::vector<int> &validIndices) {
+    for (size_t i = 0; i + 1 < validIndices.size(); i++) {
+        for (size_t j = i + 1; j < validIndices.size(); j++) {
             if (WiFi.RSSI(validIndices[j]) > WiFi.RSSI(validIndices[i])) {
                 int temp = validIndices[i];
                 validIndices[i] = validIndices[j];
@@ -680,21 +664,21 @@ void printScanResult(int n, bool removeDuplicates) {
     if (n == -2) {
         wifiList += "]";
     } else if (n > 0) {
-        // Primeiro: coletar TODAS as redes válidas, mantendo apenas as melhores.
-        int validIndices[WM_MAX_SCAN_NETWORKS];
-        int validCount = 0;
+        // Primeiro: coletar TODAS as redes válidas.
+        std::vector<int> validIndices;
+        validIndices.reserve(n);
         
-        // Itera TODAS as N redes, mas guarda apenas as 10 melhores por RSSI.
+        // Itera TODAS as N redes e deixa o rank para a ordenação por RSSI.
         for (int i = 0; i < n; i++) {
-            addScanIndexBySignal(validIndices, validCount, WM_MAX_SCAN_NETWORKS, i, removeDuplicates);
+            addScanIndexBySignal(validIndices, i, removeDuplicates);
         }
         
-        // Agora ordena apenas os validCount elementos
-        sortScanIndicesBySignal(validIndices, validCount);
+        // Agora ordena por sinal: em RSSI negativo, -40 é melhor que -70.
+        sortScanIndicesBySignal(validIndices);
         
         // Build JSON
         bool first = true;
-        for (int i = 0; i < validCount; i++) {
+        for (size_t i = 0; i < validIndices.size(); i++) {
             if (!first) wifiList += ",";
             first = false;
             wifiList += "{\"rssi\":" + String(WiFi.RSSI(validIndices[i]));
@@ -710,7 +694,7 @@ void printScanResult(int n, bool removeDuplicates) {
 // Rota para escanear redes Wi-Fi
 void WiFiManager::handleScanWiFi() {
   int n = WiFi.scanNetworks(); // Escaneia as redes Wi-Fi
-  printScanResult(n, true);    // Gera a lista JSON, mantendo o melhor sinal por SSID
+  printScanResult(n, false);   // Gera a lista JSON com todos os APs encontrados
   server->send(200, "application/json", wifiList); // Retorna a lista ao cliente
 }
 
@@ -1733,22 +1717,21 @@ String WiFiManager::getScanItemOut(){
       DEBUG_WM(n,F("networks found"));
       #endif
       
-      // Limit to max 10 networks to prevent device overload
-      int validIndices[WM_MAX_SCAN_NETWORKS];
-      int validCount = 0;
+      std::vector<int> validIndices;
+      validIndices.reserve(n);
       
-      // Process ALL networks but keep only top 10 best in memory
+      // Process ALL networks and sort them by signal strength.
       for (int i = 0; i < n; i++) {
-        addScanIndexBySignal(validIndices, validCount, WM_MAX_SCAN_NETWORKS, i, _removeDuplicateAPs);
+        addScanIndexBySignal(validIndices, i, _removeDuplicateAPs);
       }
       
       // Sort the selected networks by RSSI (descending)
-      sortScanIndicesBySignal(validIndices, validCount);
+      sortScanIndicesBySignal(validIndices);
       
-      int displayCount = 0;
+      size_t displayCount = 0;
       
       // Pre-allocate page String to reduce reallocations (estimate ~200 bytes per network)
-      page.reserve(validCount * 200);
+      page.reserve(validIndices.size() * 200);
 
       // token precheck, to speed up replacements on large ap lists
       String HTTP_ITEM_STR = FPSTR(HTTP_ITEM);
@@ -1767,7 +1750,7 @@ String WiFiManager::getScanItemOut(){
       bool tok_i = HTTP_ITEM_STR.indexOf(FPSTR(T_i)) > 0;
       
       //display networks in page
-      for (int i = 0; i < validCount; i++) {
+      for (size_t i = 0; i < validIndices.size(); i++) {
 
         #ifdef WM_DEBUG_LEVEL
         DEBUG_WM(WM_DEBUG_VERBOSE,F("AP: "),(String)WiFi.RSSI(validIndices[i]) + " " + (String)WiFi.SSID(validIndices[i]));
@@ -1806,7 +1789,7 @@ String WiFiManager::getScanItemOut(){
       }
       
       #ifdef WM_DEBUG_LEVEL
-      if(displayCount < validCount) {
+      if(displayCount < validIndices.size()) {
         DEBUG_WM(WM_DEBUG_VERBOSE,F("Some networks filtered by _minimumQuality"));
       }
       #endif
@@ -3064,9 +3047,9 @@ void WiFiManager::setCustomMenuHTML(const char* html) {
 
 /**
  * toggle wifiscan hiding of duplicate ssid names
- * if this is false, wifiscan will remove duplicat Access Points - defaut true
+ * if this is true, wifiscan will remove duplicate Access Points - default false
  * @access public
- * @param boolean removeDuplicates [true]
+ * @param boolean removeDuplicates [false]
  */
 void WiFiManager::setRemoveDuplicateAPs(boolean removeDuplicates) {
   _removeDuplicateAPs = removeDuplicates;

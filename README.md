@@ -353,10 +353,10 @@ wifiManager.setMinimumSignalQuality(10);
 ```
 will not show networks under 10% signal quality. If you omit the parameter it defaults to 8%;
 
-- You can also remove or show duplicate networks (default is remove).
-Use this function to show (or hide) all networks.
+- You can also remove or show duplicate networks (default is show).
+Use this function to hide duplicate AP names.
 ```cpp
-wifiManager.setRemoveDuplicateAPs(false);
+wifiManager.setRemoveDuplicateAPs(true);
 ```
 
 #### Debug
@@ -573,4 +573,3 @@ And countless others
  * https://github.com/chriscook8/esp-arduino-apboot
  * https://github.com/esp8266/Arduino/tree/master/libraries/DNSServer/examples/CaptivePortalAdvanced
  * Built by AlexT https://github.com/tzapu
-

@@ -65,7 +65,7 @@ void setup() {
   // wm.setAPClientCheck(true); // avoid timeout if client connected to softap
 
   // wifi scan settings
-  // wm.setRemoveDuplicateAPs(false); // do not remove duplicate ap names (true)
+  // wm.setRemoveDuplicateAPs(true);  // remove duplicate ap names (false)
   // wm.setMinimumSignalQuality(20);  // set min RSSI (percentage) to show in scans, null = 8%
   // wm.setShowInfoErase(false);      // do not show erase button on info page
   // wm.setScanDispPerc(true);       // show RSSI as percentage not graph icons
