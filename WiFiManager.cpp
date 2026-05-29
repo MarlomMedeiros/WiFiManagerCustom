@@ -627,7 +627,7 @@ boolean WiFiManager::configPortalHasTimeout(){
 #include <algorithm>
 
 void printScanResult(int n) {
-    const int WM_MAX_NETWORKS = 10;
+    const int WM_MAX_NETWORKS = 15;
     
     wifiList = "[";
     if (n == -2) {
@@ -638,17 +638,17 @@ void printScanResult(int n) {
         int validCount = 0;
         int scannedCount = 0;
         
-        // Itera TODAS as N redes, mas guarda apenas as 10 melhores
+        // Itera TODAS as N redes, mas guarda apenas as 15 melhores
         for (int i = 0; i < n; i++) {
             if (WiFi.SSID(i) == "") continue;
             
             int currentRSSI = WiFi.RSSI(i);
             
-            // Se ainda não temos 10, adiciona direto
+            // Se ainda não temos 15, adiciona direto
             if (validCount < WM_MAX_NETWORKS) {
                 validIndices[validCount++] = i;
             }
-            // Se já temos 10, verifica se é melhor que o pior
+            // Se já temos 15, verifica se é melhor que o pior
             else {
                 // Encontra o pior RSSI no array
                 int worstIdx = 0;
@@ -1716,12 +1716,12 @@ String WiFiManager::WiFiManager::getScanItemOut(){
       DEBUG_WM(n,F("networks found"));
       #endif
       
-      // Limit to max 10 networks to prevent device overload
-      const int WM_MAX_NETWORKS = 10;
+      // Limit to max 15 networks to prevent device overload
+      const int WM_MAX_NETWORKS = 15;
       int validIndices[WM_MAX_NETWORKS];
       int validCount = 0;
       
-      // Process ALL networks but keep only top 10 best in memory
+      // Process ALL networks but keep only top 15 best in memory
       for (int i = 0; i < n; i++) {
         // Skip empty SSIDs
         if (WiFi.SSID(i) == "") continue;
@@ -1745,7 +1745,7 @@ String WiFiManager::WiFiManager::getScanItemOut(){
         if (validCount < WM_MAX_NETWORKS) {
           validIndices[validCount++] = i;
         }
-        // If already have 10, check if current is better than worst
+        // If already have 15, check if current is better than worst
         else {
           // Find the worst RSSI in array
           int worstIdx = 0;
