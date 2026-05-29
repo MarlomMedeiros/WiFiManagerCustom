@@ -658,6 +658,16 @@ static void sortScanIndicesBySignal(std::vector<int> &validIndices) {
     }
 }
 
+static int16_t scanWiFiNetworks(bool async) {
+    #ifdef ESP32
+    return WiFi.scanNetworks(async, true, true, 500, 0);
+    #elif defined(ESP8266)
+    return WiFi.scanNetworks(async, true);
+    #else
+    return WiFi.scanNetworks();
+    #endif
+}
+
 void printScanResult(int n, bool removeDuplicates) {
     
     wifiList = "[";
@@ -693,8 +703,8 @@ void printScanResult(int n, bool removeDuplicates) {
 
 // Rota para escanear redes Wi-Fi
 void WiFiManager::handleScanWiFi() {
-  int n = WiFi.scanNetworks(); // Escaneia as redes Wi-Fi
-  printScanResult(n, false);   // Gera a lista JSON com todos os APs encontrados
+  WiFi_scanNetworks(true, false);  // Escaneia as redes Wi-Fi com STA ativo
+  printScanResult(_numNetworks, false); // Gera a lista JSON com todos os APs encontrados
   server->send(200, "application/json", wifiList); // Retorna a lista ao cliente
 }
 
@@ -1641,8 +1651,12 @@ bool WiFiManager::WiFi_scanNetworks(bool force,bool async){
     }
 
     if(force){
-      int8_t res;
+      int16_t res;
       _startscan = millis();
+      WiFi.scanDelete();
+      WiFi_enableSTA(true);
+      delay(300);
+      WiFiSetCountry();
       if(async && _asyncScan){
         #ifdef ESP8266
           #ifndef WM_NOASYNC // no async available < 2.4.0
@@ -1653,24 +1667,25 @@ bool WiFiManager::WiFi_scanNetworks(bool force,bool async){
           WiFi.scanNetworksAsync(std::bind(&WiFiManager::WiFi_scanComplete,this,_1));
           #else
           DEBUG_WM(WM_DEBUG_VERBOSE,F("WiFi Scan SYNC started"));
-          res = WiFi.scanNetworks();
+          res = scanWiFiNetworks(false);
           #endif
         #else
         #ifdef WM_DEBUG_LEVEL
           DEBUG_WM(WM_DEBUG_VERBOSE,F("WiFi Scan ASYNC started"));
           #endif
-          res = WiFi.scanNetworks(true);
+          res = scanWiFiNetworks(true);
         #endif
         return false;
       }
       else{
         DEBUG_WM(WM_DEBUG_VERBOSE,F("WiFi Scan SYNC started"));
-        res = WiFi.scanNetworks();
+        res = scanWiFiNetworks(false);
       }
       if(res == WIFI_SCAN_FAILED){
         #ifdef WM_DEBUG_LEVEL
         DEBUG_WM(WM_DEBUG_ERROR,F("[ERROR] scan failed"));
         #endif
+        _numNetworks = 0;
       }  
       else if(res == WIFI_SCAN_RUNNING){
         #ifdef WM_DEBUG_LEVEL
