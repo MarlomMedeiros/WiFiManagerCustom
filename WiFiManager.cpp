@@ -626,16 +626,91 @@ boolean WiFiManager::configPortalHasTimeout(){
 
 #include <algorithm>
 
-static void addScanIndexBySignal(std::vector<int> &validIndices, int index, bool removeDuplicates) {
-    if (WiFi.SSID(index) == "") return;
+struct WMCachedScanNetwork {
+    String ssid;
+    String bssid;
+    int32_t rssi;
+    uint8_t encryptionType;
+    unsigned long lastSeen;
+    uint8_t missedScans;
+};
 
-    int currentRSSI = WiFi.RSSI(index);
+static std::vector<WMCachedScanNetwork> wmScanCache;
+static bool wmScanResultAvailable = false;
+static const uint8_t WM_SCAN_CACHE_MAX_MISSES = 3;
+static const unsigned long WM_SCAN_CACHE_MAX_AGE = 60000;
+
+static int16_t scanWiFiNetworks(bool async) {
+    #ifdef ESP32
+    return WiFi.scanNetworks(async, true, false, 500, 0);
+    #elif defined(ESP8266)
+    return WiFi.scanNetworks(async, true);
+    #else
+    return WiFi.scanNetworks();
+    #endif
+}
+
+static int findCachedScanNetwork(const String &bssid, const String &ssid, uint8_t encryptionType) {
+    for (size_t i = 0; i < wmScanCache.size(); i++) {
+        if (bssid != "" && wmScanCache[i].bssid == bssid) return (int)i;
+        if (bssid == "" && wmScanCache[i].bssid == "" && wmScanCache[i].ssid == ssid && wmScanCache[i].encryptionType == encryptionType) return (int)i;
+    }
+    return -1;
+}
+
+static void pruneScanCache(unsigned long now) {
+    for (int i = (int)wmScanCache.size() - 1; i >= 0; i--) {
+        if (wmScanCache[i].missedScans >= WM_SCAN_CACHE_MAX_MISSES || now - wmScanCache[i].lastSeen > WM_SCAN_CACHE_MAX_AGE) {
+            wmScanCache.erase(wmScanCache.begin() + i);
+        }
+    }
+}
+
+static void updateScanCacheFromWiFi(int n) {
+    if (n <= 0) return;
+
+    unsigned long now = millis();
+    for (size_t i = 0; i < wmScanCache.size(); i++) {
+        if (wmScanCache[i].missedScans < 255) wmScanCache[i].missedScans++;
+    }
+
+    for (int i = 0; i < n; i++) {
+        String ssid = WiFi.SSID(i);
+        if (ssid == "") continue;
+
+        uint8_t encryptionType = WiFi.encryptionType(i);
+        String bssid = WiFi.BSSIDstr(i);
+        int cachedIndex = findCachedScanNetwork(bssid, ssid, encryptionType);
+
+        if (cachedIndex >= 0) {
+            wmScanCache[cachedIndex].ssid = ssid;
+            wmScanCache[cachedIndex].bssid = bssid;
+            wmScanCache[cachedIndex].rssi = WiFi.RSSI(i);
+            wmScanCache[cachedIndex].encryptionType = encryptionType;
+            wmScanCache[cachedIndex].lastSeen = now;
+            wmScanCache[cachedIndex].missedScans = 0;
+        } else {
+            WMCachedScanNetwork network;
+            network.ssid = ssid;
+            network.bssid = bssid;
+            network.rssi = WiFi.RSSI(i);
+            network.encryptionType = encryptionType;
+            network.lastSeen = now;
+            network.missedScans = 0;
+            wmScanCache.push_back(network);
+        }
+    }
+
+    pruneScanCache(now);
+}
+
+static void addCachedScanIndexBySignal(std::vector<int> &validIndices, int index, bool removeDuplicates) {
+    if (wmScanCache[index].ssid == "") return;
 
     if (removeDuplicates) {
-        String currentSSID = WiFi.SSID(index);
         for (size_t i = 0; i < validIndices.size(); i++) {
-            if (currentSSID == WiFi.SSID(validIndices[i])) {
-                if (currentRSSI > WiFi.RSSI(validIndices[i])) {
+            if (wmScanCache[index].ssid == wmScanCache[validIndices[i]].ssid) {
+                if (wmScanCache[index].rssi > wmScanCache[validIndices[i]].rssi) {
                     validIndices[i] = index;
                 }
                 return;
@@ -646,10 +721,10 @@ static void addScanIndexBySignal(std::vector<int> &validIndices, int index, bool
     validIndices.push_back(index);
 }
 
-static void sortScanIndicesBySignal(std::vector<int> &validIndices) {
+static void sortCachedScanIndicesBySignal(std::vector<int> &validIndices) {
     for (size_t i = 0; i + 1 < validIndices.size(); i++) {
         for (size_t j = i + 1; j < validIndices.size(); j++) {
-            if (WiFi.RSSI(validIndices[j]) > WiFi.RSSI(validIndices[i])) {
+            if (wmScanCache[validIndices[j]].rssi > wmScanCache[validIndices[i]].rssi) {
                 int temp = validIndices[i];
                 validIndices[i] = validIndices[j];
                 validIndices[j] = temp;
@@ -658,44 +733,39 @@ static void sortScanIndicesBySignal(std::vector<int> &validIndices) {
     }
 }
 
-static int16_t scanWiFiNetworks(bool async) {
-    #ifdef ESP32
-    return WiFi.scanNetworks(async, true, true, 500, 0);
-    #elif defined(ESP8266)
-    return WiFi.scanNetworks(async, true);
-    #else
-    return WiFi.scanNetworks();
-    #endif
+static void getCachedScanIndices(std::vector<int> &validIndices, bool removeDuplicates) {
+    pruneScanCache(millis());
+    validIndices.reserve(wmScanCache.size());
+    for (size_t i = 0; i < wmScanCache.size(); i++) {
+        addCachedScanIndexBySignal(validIndices, i, removeDuplicates);
+    }
+    sortCachedScanIndicesBySignal(validIndices);
 }
 
 void printScanResult(int n, bool removeDuplicates) {
     
+    updateScanCacheFromWiFi(n);
+
     wifiList = "[";
-    if (n == -2) {
+    if (n == -2 && wmScanCache.empty()) {
         wifiList += "]";
-    } else if (n > 0) {
-        // Primeiro: coletar TODAS as redes válidas.
+    } else if (!wmScanCache.empty()) {
         std::vector<int> validIndices;
-        validIndices.reserve(n);
-        
-        // Itera TODAS as N redes e deixa o rank para a ordenação por RSSI.
-        for (int i = 0; i < n; i++) {
-            addScanIndexBySignal(validIndices, i, removeDuplicates);
-        }
-        
-        // Agora ordena por sinal: em RSSI negativo, -40 é melhor que -70.
-        sortScanIndicesBySignal(validIndices);
+        getCachedScanIndices(validIndices, removeDuplicates);
         
         // Build JSON
         bool first = true;
         for (size_t i = 0; i < validIndices.size(); i++) {
             if (!first) wifiList += ",";
             first = false;
-            wifiList += "{\"rssi\":" + String(WiFi.RSSI(validIndices[i]));
-            wifiList += ",\"ssid\":\"" + WiFi.SSID(validIndices[i]) + "\"";
-            wifiList += ",\"secure\":" + String(WiFi.encryptionType(validIndices[i])) + "}";
+            wifiList += "{\"rssi\":" + String(wmScanCache[validIndices[i]].rssi);
+            wifiList += ",\"ssid\":\"" + wmScanCache[validIndices[i]].ssid + "\"";
+            wifiList += ",\"secure\":" + String(wmScanCache[validIndices[i]].encryptionType) + "}";
         }
+    }
+    if (n > 0) {
         WiFi.scanDelete();
+        wmScanResultAvailable = false;
     }
     wifiList += "]";
 }
@@ -1615,6 +1685,7 @@ String WiFiManager::getMenuOut(){
 void WiFiManager::WiFi_scanComplete(int networksFound){
   _lastscan = millis();
   _numNetworks = networksFound;
+  wmScanResultAvailable = networksFound > 0;
   #ifdef WM_DEBUG_LEVEL
   DEBUG_WM(WM_DEBUG_VERBOSE,F("WiFi Scan ASYNC completed"), "in "+(String)(_lastscan - _startscan)+" ms");  
   DEBUG_WM(WM_DEBUG_VERBOSE,F("WiFi Scan ASYNC found:"),_numNetworks);
@@ -1686,6 +1757,7 @@ bool WiFiManager::WiFi_scanNetworks(bool force,bool async){
         DEBUG_WM(WM_DEBUG_ERROR,F("[ERROR] scan failed"));
         #endif
         _numNetworks = 0;
+        wmScanResultAvailable = false;
       }  
       else if(res == WIFI_SCAN_RUNNING){
         #ifdef WM_DEBUG_LEVEL
@@ -1698,8 +1770,12 @@ bool WiFiManager::WiFi_scanNetworks(bool force,bool async){
           delay(100);
         }
         _numNetworks = WiFi.scanComplete();
+        wmScanResultAvailable = _numNetworks > 0;
       }
-      else if(res >=0 ) _numNetworks = res;
+      else if(res >=0 ) {
+        _numNetworks = res;
+        wmScanResultAvailable = _numNetworks > 0;
+      }
       _lastscan = millis();
       #ifdef WM_DEBUG_LEVEL
       DEBUG_WM(WM_DEBUG_VERBOSE,F("WiFi Scan completed"), "in "+(String)(_lastscan - _startscan)+" ms");
@@ -1717,9 +1793,14 @@ bool WiFiManager::WiFi_scanNetworks(bool force,bool async){
 String WiFiManager::getScanItemOut(){
     String page;
 
-    if(!_numNetworks) WiFi_scanNetworks(); // scan in case this gets called before any scans
+    if(!_numNetworks && wmScanCache.empty()) WiFi_scanNetworks(); // scan in case this gets called before any scans
+    if(_numNetworks > 0 && wmScanResultAvailable) {
+      updateScanCacheFromWiFi(_numNetworks);
+      WiFi.scanDelete();
+      wmScanResultAvailable = false;
+    }
 
-    int n = _numNetworks;
+    int n = (int)wmScanCache.size();
     if (n == 0) {
       #ifdef WM_DEBUG_LEVEL
       DEBUG_WM(F("No networks found"));
@@ -1733,15 +1814,7 @@ String WiFiManager::getScanItemOut(){
       #endif
       
       std::vector<int> validIndices;
-      validIndices.reserve(n);
-      
-      // Process ALL networks and sort them by signal strength.
-      for (int i = 0; i < n; i++) {
-        addScanIndexBySignal(validIndices, i, _removeDuplicateAPs);
-      }
-      
-      // Sort the selected networks by RSSI (descending)
-      sortScanIndicesBySignal(validIndices);
+      getCachedScanIndices(validIndices, _removeDuplicateAPs);
       
       size_t displayCount = 0;
       
@@ -1768,19 +1841,19 @@ String WiFiManager::getScanItemOut(){
       for (size_t i = 0; i < validIndices.size(); i++) {
 
         #ifdef WM_DEBUG_LEVEL
-        DEBUG_WM(WM_DEBUG_VERBOSE,F("AP: "),(String)WiFi.RSSI(validIndices[i]) + " " + (String)WiFi.SSID(validIndices[i]));
+        DEBUG_WM(WM_DEBUG_VERBOSE,F("AP: "),(String)wmScanCache[validIndices[i]].rssi + " " + wmScanCache[validIndices[i]].ssid);
         #endif
 
-        int rssiperc = getRSSIasQuality(WiFi.RSSI(validIndices[i]));
-        uint8_t enc_type = WiFi.encryptionType(validIndices[i]);
+        int rssiperc = getRSSIasQuality(wmScanCache[validIndices[i]].rssi);
+        uint8_t enc_type = wmScanCache[validIndices[i]].encryptionType;
 
         if (_minimumQuality == -1 || _minimumQuality < rssiperc) {
           String item = HTTP_ITEM_STR;
-          item.replace(FPSTR(T_V), htmlEntities(WiFi.SSID(validIndices[i]))); // ssid no encoding
-          item.replace(FPSTR(T_v), htmlEntities(WiFi.SSID(validIndices[i]),true)); // ssid no encoding
+          item.replace(FPSTR(T_V), htmlEntities(wmScanCache[validIndices[i]].ssid)); // ssid no encoding
+          item.replace(FPSTR(T_v), htmlEntities(wmScanCache[validIndices[i]].ssid,true)); // ssid no encoding
           if(tok_e) item.replace(FPSTR(T_e), encryptionTypeStr(enc_type));
           if(tok_r) item.replace(FPSTR(T_r), (String)rssiperc); // rssi percentage 0-100
-          if(tok_R) item.replace(FPSTR(T_R), (String)WiFi.RSSI(validIndices[i])); // rssi db
+          if(tok_R) item.replace(FPSTR(T_R), (String)wmScanCache[validIndices[i]].rssi); // rssi db
           if(tok_q) item.replace(FPSTR(T_q), (String)int(round(map(rssiperc,0,100,1,4)))); //quality icon 1-4
           if(tok_i){
             if (enc_type != WM_WIFIOPEN) {
