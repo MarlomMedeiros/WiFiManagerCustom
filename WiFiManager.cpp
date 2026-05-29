@@ -626,54 +626,71 @@ boolean WiFiManager::configPortalHasTimeout(){
 
 #include <algorithm>
 
-void printScanResult(int n) {
-    const int WM_MAX_NETWORKS = 10;
+static const int WM_MAX_SCAN_NETWORKS = 10;
+
+static void addScanIndexBySignal(int *validIndices, int &validCount, int maxNetworks, int index, bool removeDuplicates) {
+    if (WiFi.SSID(index) == "") return;
+
+    int currentRSSI = WiFi.RSSI(index);
+
+    if (removeDuplicates) {
+        String currentSSID = WiFi.SSID(index);
+        for (int i = 0; i < validCount; i++) {
+            if (currentSSID == WiFi.SSID(validIndices[i])) {
+                if (currentRSSI > WiFi.RSSI(validIndices[i])) {
+                    validIndices[i] = index;
+                }
+                return;
+            }
+        }
+    }
+
+    if (validCount < maxNetworks) {
+        validIndices[validCount++] = index;
+        return;
+    }
+
+    int worstIdx = 0;
+    for (int i = 1; i < validCount; i++) {
+        if (WiFi.RSSI(validIndices[i]) < WiFi.RSSI(validIndices[worstIdx])) {
+            worstIdx = i;
+        }
+    }
+
+    if (currentRSSI > WiFi.RSSI(validIndices[worstIdx])) {
+        validIndices[worstIdx] = index;
+    }
+}
+
+static void sortScanIndicesBySignal(int *validIndices, int validCount) {
+    for (int i = 0; i < validCount - 1; i++) {
+        for (int j = i + 1; j < validCount; j++) {
+            if (WiFi.RSSI(validIndices[j]) > WiFi.RSSI(validIndices[i])) {
+                int temp = validIndices[i];
+                validIndices[i] = validIndices[j];
+                validIndices[j] = temp;
+            }
+        }
+    }
+}
+
+void printScanResult(int n, bool removeDuplicates) {
     
     wifiList = "[";
     if (n == -2) {
         wifiList += "]";
     } else if (n > 0) {
-        // Primeiro: coletar TODAS as redes válidas em array pequeno
-        int validIndices[WM_MAX_NETWORKS];
+        // Primeiro: coletar TODAS as redes válidas, mantendo apenas as melhores.
+        int validIndices[WM_MAX_SCAN_NETWORKS];
         int validCount = 0;
-        int scannedCount = 0;
         
-        // Itera TODAS as N redes, mas guarda apenas as 10 melhores
+        // Itera TODAS as N redes, mas guarda apenas as 10 melhores por RSSI.
         for (int i = 0; i < n; i++) {
-            if (WiFi.SSID(i) == "") continue;
-            
-            int currentRSSI = WiFi.RSSI(i);
-            
-            // Se ainda não temos 10, adiciona direto
-            if (validCount < WM_MAX_NETWORKS) {
-                validIndices[validCount++] = i;
-            }
-            // Se já temos 10, verifica se é melhor que o pior
-            else {
-                // Encontra o pior RSSI no array
-                int worstIdx = 0;
-                for (int j = 1; j < WM_MAX_NETWORKS; j++) {
-                    if (WiFi.RSSI(validIndices[j]) < WiFi.RSSI(validIndices[worstIdx])) {
-                        worstIdx = j;
-                    }
-                }
-                // Se atual é melhor que o pior, substitui
-                if (currentRSSI > WiFi.RSSI(validIndices[worstIdx])) {
-                    validIndices[worstIdx] = i;
-                }
-            }
+            addScanIndexBySignal(validIndices, validCount, WM_MAX_SCAN_NETWORKS, i, removeDuplicates);
         }
         
         // Agora ordena apenas os validCount elementos
-        for (int i = 0; i < validCount - 1; i++) {
-            for (int j = i + 1; j < validCount; j++) {
-                if (WiFi.RSSI(validIndices[j]) > WiFi.RSSI(validIndices[i])) {
-                    int temp = validIndices[i];
-                    validIndices[i] = validIndices[j];
-                    validIndices[j] = temp;
-                }
-            }
-        }
+        sortScanIndicesBySignal(validIndices, validCount);
         
         // Build JSON
         bool first = true;
@@ -693,7 +710,7 @@ void printScanResult(int n) {
 // Rota para escanear redes Wi-Fi
 void WiFiManager::handleScanWiFi() {
   int n = WiFi.scanNetworks(); // Escaneia as redes Wi-Fi
-  printScanResult(n);          // Gera a lista JSON
+  printScanResult(n, true);    // Gera a lista JSON, mantendo o melhor sinal por SSID
   server->send(200, "application/json", wifiList); // Retorna a lista ao cliente
 }
 
@@ -1698,7 +1715,7 @@ bool WiFiManager::WiFi_scanNetworks(bool force,bool async){
     return false;
 }
 
-String WiFiManager::WiFiManager::getScanItemOut(){
+String WiFiManager::getScanItemOut(){
     String page;
 
     if(!_numNetworks) WiFi_scanNetworks(); // scan in case this gets called before any scans
@@ -1717,60 +1734,16 @@ String WiFiManager::WiFiManager::getScanItemOut(){
       #endif
       
       // Limit to max 10 networks to prevent device overload
-      const int WM_MAX_NETWORKS = 10;
-      int validIndices[WM_MAX_NETWORKS];
+      int validIndices[WM_MAX_SCAN_NETWORKS];
       int validCount = 0;
       
       // Process ALL networks but keep only top 10 best in memory
       for (int i = 0; i < n; i++) {
-        // Skip empty SSIDs
-        if (WiFi.SSID(i) == "") continue;
-        
-        int currentRSSI = WiFi.RSSI(i);
-        
-        // Skip duplicates if enabled
-        if (_removeDuplicateAPs) {
-          bool isDuplicate = false;
-          String currentSSID = WiFi.SSID(i);
-          for (int j = 0; j < validCount; j++) {
-            if (currentSSID == WiFi.SSID(validIndices[j])) {
-              isDuplicate = true;
-              break;
-            }
-          }
-          if (isDuplicate) continue;
-        }
-        
-        // If we haven't filled the array yet, just add it
-        if (validCount < WM_MAX_NETWORKS) {
-          validIndices[validCount++] = i;
-        }
-        // If already have 10, check if current is better than worst
-        else {
-          // Find the worst RSSI in array
-          int worstIdx = 0;
-          for (int j = 1; j < WM_MAX_NETWORKS; j++) {
-            if (WiFi.RSSI(validIndices[j]) < WiFi.RSSI(validIndices[worstIdx])) {
-              worstIdx = j;
-            }
-          }
-          // If current is better than worst, replace it
-          if (currentRSSI > WiFi.RSSI(validIndices[worstIdx])) {
-            validIndices[worstIdx] = i;
-          }
-        }
+        addScanIndexBySignal(validIndices, validCount, WM_MAX_SCAN_NETWORKS, i, _removeDuplicateAPs);
       }
       
       // Sort the selected networks by RSSI (descending)
-      for (int i = 0; i < validCount - 1; i++) {
-        for (int j = i + 1; j < validCount; j++) {
-          if (WiFi.RSSI(validIndices[j]) > WiFi.RSSI(validIndices[i])) {
-            int temp = validIndices[i];
-            validIndices[i] = validIndices[j];
-            validIndices[j] = temp;
-          }
-        }
-      }
+      sortScanIndicesBySignal(validIndices, validCount);
       
       int displayCount = 0;
       

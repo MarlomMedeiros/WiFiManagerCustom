@@ -39,7 +39,7 @@
 #define WM_NOSOFTAPSSID    // no softapssid() @todo shim
 #endif
 
-void printScanResult(int n);
+void printScanResult(int n, bool removeDuplicates = true);
 
 // #ifdef CONFIG_IDF_TARGET_ESP32S2
 // #warning ESP32S2
